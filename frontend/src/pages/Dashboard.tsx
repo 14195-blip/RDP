@@ -7,6 +7,12 @@ import SettingsPanel, {
   SettingCard, ToggleField, InputField, TextAreaField, SelectField,
   NumberField, ColorField, MultiSelectField, ListEditor,
 } from '../components/SettingsPanel';
+import LevelPanel from '../components/panels/LevelPanel';
+import ShopPanel from '../components/panels/ShopPanel';
+import AutoRepliesPanel from '../components/panels/AutoRepliesPanel';
+import AliasesPanel from '../components/panels/AliasesPanel';
+import CompaniesPanel from '../components/panels/CompaniesPanel';
+import EmbedButtonsPanel from '../components/panels/EmbedButtonsPanel';
 
 interface Channel { id: string; name: string; type: number; }
 interface Role { id: string; name: string; color: number; managed: boolean; }
@@ -124,23 +130,28 @@ export default function Dashboard() {
       case 'auto_roles': return renderAutoRoles();
       case 'moderation': return renderModeration();
       case 'tickets': return renderTickets();
-      case 'level': return renderLevel();
+      case 'level':
+        return <LevelPanel s={s} roles={roles} channelOptions={channelOptions} roleOptions={roleOptions} update={update} save={save} saving={saving} saved={saved} />;
       case 'vc': return renderVC();
       case 'economy': return renderEconomy();
-      case 'shop': return renderShop();
-      case 'auto_replies': return renderAutoReplies();
+      case 'shop':
+        return <ShopPanel s={s} roleOptions={roleOptions} update={update} save={save} saving={saving} saved={saved} />;
+      case 'auto_replies':
+        return <AutoRepliesPanel guildId={guildId!} settings={settings} setSettings={setSettings} saving={saving} setSaving={setSaving} saved={saved} setSaved={setSaved} />;
       case 'permissions': return renderPermissions();
-      case 'aliases': return renderAliases();
-      case 'companies': return renderCompanies();
+      case 'aliases':
+        return <AliasesPanel s={s} update={update} setSettings={setSettings} setSaved={setSaved} save={save} saving={saving} saved={saved} />;
+      case 'companies':
+        return <CompaniesPanel s={s} update={update} setSettings={setSettings} setSaved={setSaved} save={save} saving={saving} saved={saved} />;
       case 'embed_style': return renderEmbedStyle();
-      case 'embed_buttons': return renderEmbedButtons();
+      case 'embed_buttons':
+        return <EmbedButtonsPanel s={s} update={update} save={save} saving={saving} saved={saved} />;
       case 'anti_cheat': return renderAntiCheat();
       case 'captcha': return renderCaptcha();
       default: return <div className="text-white">Select a section</div>;
     }
   }
 
-  // ========== GENERAL ==========
   function renderGeneral() {
     return (
       <SettingsPanel title="General Settings" description="Configure basic bot settings" icon="⚙️" onSave={save} saving={saving} saved={saved}>
@@ -154,7 +165,6 @@ export default function Dashboard() {
     );
   }
 
-  // ========== WELCOME ==========
   function renderWelcome() {
     return (
       <SettingsPanel title="Welcome System" description="Configure welcome messages for new members" icon="👋" onSave={save} saving={saving} saved={saved}>
@@ -170,7 +180,6 @@ export default function Dashboard() {
     );
   }
 
-  // ========== LEAVE ==========
   function renderLeave() {
     return (
       <SettingsPanel title="Leave System" description="Configure leave messages" icon="🚪" onSave={save} saving={saving} saved={saved}>
@@ -183,7 +192,6 @@ export default function Dashboard() {
     );
   }
 
-  // ========== LOGS ==========
   function renderLogs() {
     const logTypes = [
       { key: 'msg', label: 'Message Logs (delete/edit)' },
@@ -206,7 +214,6 @@ export default function Dashboard() {
     );
   }
 
-  // ========== AUTO ROLES ==========
   function renderAutoRoles() {
     return (
       <SettingsPanel title="Auto Roles" description="Automatically assign roles when members join" icon="🎭" onSave={save} saving={saving} saved={saved}>
@@ -218,7 +225,6 @@ export default function Dashboard() {
     );
   }
 
-  // ========== MODERATION ==========
   function renderModeration() {
     return (
       <SettingsPanel title="Moderation" description="Configure moderation commands and roles" icon="🛡️" onSave={save} saving={saving} saved={saved}>
@@ -239,7 +245,6 @@ export default function Dashboard() {
     );
   }
 
-  // ========== TICKETS ==========
   function renderTickets() {
     return (
       <SettingsPanel title="Ticket System" description="Configure support tickets" icon="🎫" onSave={save} saving={saving} saved={saved}>
@@ -261,59 +266,6 @@ export default function Dashboard() {
     );
   }
 
-  // ========== LEVEL ==========
-  function renderLevel() {
-    const [newLevelStr, setNewLevelStr] = useState('');
-    const [newRoleId, setNewRoleId] = useState('');
-    const rewards = s.role_rewards || {};
-
-    return (
-      <SettingsPanel title="Level System" description="Configure XP and leveling" icon="⭐" onSave={save} saving={saving} saved={saved}>
-        <SettingCard title="Level Settings">
-          <ToggleField label="Enable Level System" value={s.enabled ?? true} onChange={(v) => update('level', 'enabled', v)} />
-          <NumberField label="XP Rate Multiplier" value={s.xp_rate ?? 1.0} onChange={(v) => update('level', 'xp_rate', v)} min={0.1} max={10} step={0.1} />
-          <TextAreaField label="Level Up Message" value={s.level_up_message || ''} onChange={(v) => update('level', 'level_up_message', v)} placeholder="Congratulations {user}! Level {level}!" />
-          <SelectField label="Announcement Channel" value={s.announcement_channel || ''} onChange={(v) => update('level', 'announcement_channel', v)} options={channelOptions} />
-        </SettingCard>
-        <SettingCard title="Role Rewards" description="Assign roles when members reach certain levels">
-          <div className="space-y-2">
-            {Object.entries(rewards).map(([level, roleId]) => (
-              <div key={level} className="flex items-center gap-2 bg-white/5 rounded-lg p-2">
-                <span className="text-indigo-400 text-sm font-medium">Level {level}</span>
-                <span className="text-gray-400 text-sm">→</span>
-                <span className="text-gray-300 text-sm">{roles.find(r => r.id === roleId)?.name || roleId as string}</span>
-                <button
-                  onClick={() => {
-                    const newRewards = { ...rewards };
-                    delete newRewards[level];
-                    update('level', 'role_rewards', newRewards);
-                  }}
-                  className="ml-auto text-red-400 hover:text-red-300 text-sm"
-                >×</button>
-              </div>
-            ))}
-          </div>
-          <div className="flex gap-2 mt-2">
-            <input type="number" placeholder="Level" value={newLevelStr} onChange={(e) => setNewLevelStr(e.target.value)}
-              className="w-24 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500/50" />
-            <select value={newRoleId} onChange={(e) => setNewRoleId(e.target.value)}
-              className="flex-1 bg-[#1a1a2e] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500/50">
-              <option value="">Select role</option>
-              {roleOptions.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-            </select>
-            <button onClick={() => {
-              if (newLevelStr && newRoleId) {
-                update('level', 'role_rewards', { ...rewards, [newLevelStr]: newRoleId });
-                setNewLevelStr(''); setNewRoleId('');
-              }
-            }} className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-white text-sm">Add</button>
-          </div>
-        </SettingCard>
-      </SettingsPanel>
-    );
-  }
-
-  // ========== VC XP ==========
   function renderVC() {
     return (
       <SettingsPanel title="Voice Level System" description="Configure voice channel XP" icon="🎙️" onSave={save} saving={saving} saved={saved}>
@@ -327,7 +279,6 @@ export default function Dashboard() {
     );
   }
 
-  // ========== ECONOMY ==========
   function renderEconomy() {
     return (
       <SettingsPanel title="Economy / Bank" description="Configure the economy system" icon="🏦" onSave={save} saving={saving} saved={saved}>
@@ -355,123 +306,6 @@ export default function Dashboard() {
     );
   }
 
-  // ========== SHOP ==========
-  function renderShop() {
-    const items = s.items || [];
-    const [form, setForm] = useState({ name: '', description: '', price: 0, role_id: '', stock: -1, item_type: 'role' });
-
-    const addItem = () => {
-      if (!form.name) return;
-      const newItems = [...items, { ...form }];
-      update('shop', 'items', newItems);
-      setForm({ name: '', description: '', price: 0, role_id: '', stock: -1, item_type: 'role' });
-    };
-
-    const removeItem = (idx: number) => {
-      update('shop', 'items', items.filter((_: any, i: number) => i !== idx));
-    };
-
-    return (
-      <SettingsPanel title="Shop" description="Manage shop items" icon="🛒" onSave={save} saving={saving} saved={saved}>
-        <SettingCard title="Shop Status">
-          <ToggleField label="Enable Shop" value={s.enabled ?? true} onChange={(v) => update('shop', 'enabled', v)} />
-        </SettingCard>
-        <SettingCard title="Shop Items">
-          <div className="space-y-2">
-            {items.map((item: any, idx: number) => (
-              <div key={idx} className="flex items-center gap-3 bg-white/5 rounded-lg p-3">
-                <div className="flex-1">
-                  <span className="text-white text-sm font-medium">{item.name}</span>
-                  <span className="text-gray-400 text-xs ml-2">— {item.price} coins</span>
-                  {item.description && <p className="text-gray-500 text-xs mt-0.5">{item.description}</p>}
-                  <span className="text-xs text-indigo-400 ml-1">({item.item_type})</span>
-                  {item.stock >= 0 && <span className="text-xs text-yellow-400 ml-1">Stock: {item.stock}</span>}
-                </div>
-                <button onClick={() => removeItem(idx)} className="text-red-400 hover:text-red-300 text-sm px-2">🗑️</button>
-              </div>
-            ))}
-          </div>
-        </SettingCard>
-        <SettingCard title="Add New Item">
-          <InputField label="Name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} placeholder="Item name" />
-          <InputField label="Description" value={form.description} onChange={(v) => setForm({ ...form, description: v })} placeholder="Item description" />
-          <NumberField label="Price" value={form.price} onChange={(v) => setForm({ ...form, price: v })} min={0} />
-          <SelectField label="Type" value={form.item_type} onChange={(v) => setForm({ ...form, item_type: v })} options={[
-            { value: 'role', label: 'Role' }, { value: 'perk', label: 'Perk' }, { value: 'item', label: 'Item' },
-          ]} />
-          {form.item_type === 'role' && (
-            <SelectField label="Role" value={form.role_id} onChange={(v) => setForm({ ...form, role_id: v })} options={roleOptions} />
-          )}
-          <NumberField label="Stock (-1 = unlimited)" value={form.stock} onChange={(v) => setForm({ ...form, stock: v })} min={-1} />
-          <button onClick={addItem} className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-white text-sm font-medium transition-colors">
-            + Add Item
-          </button>
-        </SettingCard>
-      </SettingsPanel>
-    );
-  }
-
-  // ========== AUTO REPLIES ==========
-  function renderAutoReplies() {
-    const replies = settings.auto_replies || [];
-    const [form, setForm] = useState({ trigger: '', response: '', exact_match: false, enabled: true });
-
-    const addReply = () => {
-      if (!form.trigger || !form.response) return;
-      const newReplies = [...replies, { ...form }];
-      setSettings((prev: any) => ({ ...prev, auto_replies: newReplies }));
-      setForm({ trigger: '', response: '', exact_match: false, enabled: true });
-      setSaved(false);
-    };
-
-    const removeReply = (idx: number) => {
-      const newReplies = replies.filter((_: any, i: number) => i !== idx);
-      setSettings((prev: any) => ({ ...prev, auto_replies: newReplies }));
-      setSaved(false);
-    };
-
-    const saveReplies = async () => {
-      if (!guildId) return;
-      setSaving(true);
-      try {
-        await updateSectionSettings(guildId, 'auto_replies', settings.auto_replies);
-        setSaved(true);
-        setTimeout(() => setSaved(false), 3000);
-      } catch { alert('Failed to save'); }
-      finally { setSaving(false); }
-    };
-
-    return (
-      <SettingsPanel title="Auto Replies" description="Configure automatic responses" icon="💬" onSave={saveReplies} saving={saving} saved={saved}>
-        <SettingCard title="Existing Replies">
-          <div className="space-y-2">
-            {replies.map((r: any, idx: number) => (
-              <div key={idx} className="flex items-center gap-3 bg-white/5 rounded-lg p-3">
-                <div className="flex-1">
-                  <span className="text-indigo-400 text-sm font-medium">"{r.trigger}"</span>
-                  <span className="text-gray-400 text-sm"> → </span>
-                  <span className="text-gray-300 text-sm">{r.response}</span>
-                  {r.exact_match && <span className="text-xs text-yellow-400 ml-2">(exact)</span>}
-                </div>
-                <button onClick={() => removeReply(idx)} className="text-red-400 hover:text-red-300 text-sm">🗑️</button>
-              </div>
-            ))}
-            {replies.length === 0 && <p className="text-gray-500 text-sm">No auto replies configured</p>}
-          </div>
-        </SettingCard>
-        <SettingCard title="Add Auto Reply">
-          <InputField label="Trigger" value={form.trigger} onChange={(v) => setForm({ ...form, trigger: v })} placeholder="Type trigger word/phrase..." />
-          <TextAreaField label="Response" value={form.response} onChange={(v) => setForm({ ...form, response: v })} placeholder="Bot response..." />
-          <ToggleField label="Exact Match" value={form.exact_match} onChange={(v) => setForm({ ...form, exact_match: v })} />
-          <button onClick={addReply} className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-white text-sm font-medium transition-colors">
-            + Add Reply
-          </button>
-        </SettingCard>
-      </SettingsPanel>
-    );
-  }
-
-  // ========== PERMISSIONS ==========
   function renderPermissions() {
     return (
       <SettingsPanel title="Permissions" description="Configure role-based permissions" icon="🔑" onSave={save} saving={saving} saved={saved}>
@@ -488,93 +322,6 @@ export default function Dashboard() {
     );
   }
 
-  // ========== ALIASES ==========
-  function renderAliases() {
-    const aliases = s || {};
-    const [cmd, setCmd] = useState('');
-    const [alias, setAlias] = useState('');
-
-    const addAlias = () => {
-      if (!cmd || !alias) return;
-      const existing = aliases[cmd] || '';
-      const newVal = existing ? `${existing}, ${alias}` : alias;
-      update('aliases', cmd, newVal);
-      setAlias('');
-    };
-
-    return (
-      <SettingsPanel title="Command Aliases" description="Create shortcuts for commands" icon="🔤" onSave={save} saving={saving} saved={saved}>
-        <SettingCard title="Current Aliases">
-          <div className="space-y-2">
-            {Object.entries(aliases).filter(([k]) => k !== '_id' && k !== 'guild_id').map(([command, aliasList]) => (
-              <div key={command} className="flex items-center gap-3 bg-white/5 rounded-lg p-3">
-                <span className="text-indigo-400 text-sm font-medium">/{command}</span>
-                <span className="text-gray-400 text-sm">→</span>
-                <span className="text-gray-300 text-sm">{aliasList as string}</span>
-                <button onClick={() => {
-                  const newAliases = { ...aliases };
-                  delete newAliases[command];
-                  setSettings((prev: any) => ({ ...prev, aliases: newAliases }));
-                  setSaved(false);
-                }} className="ml-auto text-red-400 hover:text-red-300 text-sm">×</button>
-              </div>
-            ))}
-          </div>
-        </SettingCard>
-        <SettingCard title="Add Alias">
-          <InputField label="Command" value={cmd} onChange={setCmd} placeholder="e.g., ban" />
-          <InputField label="Alias(es)" value={alias} onChange={setAlias} placeholder="e.g., b, حظر" />
-          <button onClick={addAlias} className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-white text-sm font-medium transition-colors">
-            + Add Alias
-          </button>
-        </SettingCard>
-      </SettingsPanel>
-    );
-  }
-
-  // ========== COMPANIES ==========
-  function renderCompanies() {
-    const companies = s || {};
-    const [name, setName] = useState('');
-
-    const addCompany = () => {
-      if (!name) return;
-      const id = `company_${Date.now()}`;
-      update('companies', id, name);
-      setName('');
-    };
-
-    return (
-      <SettingsPanel title="Companies" description="Manage custom company names for your server" icon="🏢" onSave={save} saving={saving} saved={saved}>
-        <SettingCard title="Current Companies" description="Companies will auto-update in bank info">
-          <div className="space-y-2">
-            {Object.entries(companies).filter(([k]) => k !== '_id' && k !== 'guild_id').map(([id, companyName]) => (
-              <div key={id} className="flex items-center gap-3 bg-white/5 rounded-lg p-3">
-                <span className="text-white text-sm">{companyName as string}</span>
-                <button onClick={() => {
-                  const newCompanies = { ...companies };
-                  delete newCompanies[id];
-                  setSettings((prev: any) => ({ ...prev, companies: newCompanies }));
-                  setSaved(false);
-                }} className="ml-auto text-red-400 hover:text-red-300 text-sm">🗑️</button>
-              </div>
-            ))}
-            {Object.keys(companies).filter(k => k !== '_id' && k !== 'guild_id').length === 0 && (
-              <p className="text-gray-500 text-sm">No companies added yet</p>
-            )}
-          </div>
-        </SettingCard>
-        <SettingCard title="Add Company">
-          <InputField label="Company Name" value={name} onChange={setName} placeholder="Enter company name..." />
-          <button onClick={addCompany} className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-white text-sm font-medium transition-colors">
-            + Add Company
-          </button>
-        </SettingCard>
-      </SettingsPanel>
-    );
-  }
-
-  // ========== EMBED STYLE ==========
   function renderEmbedStyle() {
     return (
       <SettingsPanel title="Message Style" description="Customize how bot messages look" icon="🎨" onSave={save} saving={saving} saved={saved}>
@@ -588,62 +335,6 @@ export default function Dashboard() {
     );
   }
 
-  // ========== EMBED BUTTONS ==========
-  function renderEmbedButtons() {
-    const buttons = s.buttons || [];
-    const [form, setForm] = useState({ label: '', emoji: '', style: 'primary', title: '', description: '', footer: '' });
-
-    const addButton = () => {
-      if (!form.label) return;
-      update('embed_buttons', 'buttons', [...buttons, { ...form, fields: [] }]);
-      setForm({ label: '', emoji: '', style: 'primary', title: '', description: '', footer: '' });
-    };
-
-    const removeButton = (idx: number) => {
-      update('embed_buttons', 'buttons', buttons.filter((_: any, i: number) => i !== idx));
-    };
-
-    return (
-      <SettingsPanel title="Embed Buttons" description="Manage /setup_embeds buttons" icon="📜" onSave={save} saving={saving} saved={saved}>
-        <SettingCard title="Main Embed">
-          <InputField label="Title" value={s.embed_title || ''} onChange={(v) => update('embed_buttons', 'embed_title', v)} />
-          <TextAreaField label="Description" value={s.embed_description || ''} onChange={(v) => update('embed_buttons', 'embed_description', v)} />
-          <InputField label="Footer" value={s.embed_footer || ''} onChange={(v) => update('embed_buttons', 'embed_footer', v)} />
-          <ColorField label="Color" value={s.embed_color || '#5865F2'} onChange={(v) => update('embed_buttons', 'embed_color', v)} />
-        </SettingCard>
-        <SettingCard title="Buttons">
-          <div className="space-y-2">
-            {buttons.map((btn: any, idx: number) => (
-              <div key={idx} className="flex items-center gap-3 bg-white/5 rounded-lg p-3">
-                <span className="text-lg">{btn.emoji}</span>
-                <div className="flex-1">
-                  <span className="text-white text-sm font-medium">{btn.label}</span>
-                  {btn.title && <p className="text-gray-400 text-xs">{btn.title}</p>}
-                </div>
-                <button onClick={() => removeButton(idx)} className="text-red-400 hover:text-red-300 text-sm">🗑️</button>
-              </div>
-            ))}
-          </div>
-        </SettingCard>
-        <SettingCard title="Add Button">
-          <InputField label="Label" value={form.label} onChange={(v) => setForm({ ...form, label: v })} placeholder="Button label" />
-          <InputField label="Emoji" value={form.emoji} onChange={(v) => setForm({ ...form, emoji: v })} placeholder="🎉" />
-          <SelectField label="Style" value={form.style} onChange={(v) => setForm({ ...form, style: v })} options={[
-            { value: 'primary', label: 'Blue' }, { value: 'secondary', label: 'Gray' },
-            { value: 'success', label: 'Green' }, { value: 'danger', label: 'Red' },
-          ]} />
-          <InputField label="Embed Title" value={form.title} onChange={(v) => setForm({ ...form, title: v })} placeholder="Title when clicked" />
-          <TextAreaField label="Embed Description" value={form.description} onChange={(v) => setForm({ ...form, description: v })} placeholder="Content when clicked" />
-          <InputField label="Footer" value={form.footer} onChange={(v) => setForm({ ...form, footer: v })} />
-          <button onClick={addButton} className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-white text-sm font-medium transition-colors">
-            + Add Button
-          </button>
-        </SettingCard>
-      </SettingsPanel>
-    );
-  }
-
-  // ========== ANTI CHEAT ==========
   function renderAntiCheat() {
     return (
       <SettingsPanel title="Anti-Spam / Link / BadWords" description="Protect your server" icon="🛡️" onSave={save} saving={saving} saved={saved}>
@@ -667,7 +358,6 @@ export default function Dashboard() {
     );
   }
 
-  // ========== CAPTCHA ==========
   function renderCaptcha() {
     return (
       <SettingsPanel title="Captcha / Verification" description="Verify new members" icon="🔐" onSave={save} saving={saving} saved={saved}>

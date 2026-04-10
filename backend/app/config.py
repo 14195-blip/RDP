@@ -15,7 +15,12 @@ MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
 MONGODB_DB = os.getenv("MONGODB_DB", "kingdom_bot")
 
 # JWT
-JWT_SECRET = os.getenv("JWT_SECRET", "super-secret-key-change-in-production")
+JWT_SECRET = os.getenv("JWT_SECRET")
+if not JWT_SECRET:
+    import secrets
+    JWT_SECRET = secrets.token_urlsafe(32)
+    import warnings
+    warnings.warn("JWT_SECRET not set! Using a random secret. Sessions will not persist across restarts.", stacklevel=1)
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 

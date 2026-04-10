@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
-from app.services.auth import get_current_user
-from app.services.discord import get_guild_channels, get_guild_roles, get_guild_info, check_user_is_admin
+from app.services.auth import get_current_user, verify_guild_admin
+from app.services.discord import get_guild_channels, get_guild_roles, get_guild_info
 from app.database import get_db
 
 router = APIRouter(prefix="/guilds", tags=["guilds"])
@@ -9,6 +9,7 @@ router = APIRouter(prefix="/guilds", tags=["guilds"])
 @router.get("/{guild_id}/info")
 async def guild_info(guild_id: str, user: dict = Depends(get_current_user)):
     """Get guild info (name, icon, member count)."""
+    await verify_guild_admin(guild_id, user)
     try:
         info = await get_guild_info(guild_id)
         return {
@@ -25,6 +26,7 @@ async def guild_info(guild_id: str, user: dict = Depends(get_current_user)):
 @router.get("/{guild_id}/channels")
 async def guild_channels(guild_id: str, user: dict = Depends(get_current_user)):
     """Get guild channels."""
+    await verify_guild_admin(guild_id, user)
     try:
         channels = await get_guild_channels(guild_id)
         return [
@@ -44,6 +46,7 @@ async def guild_channels(guild_id: str, user: dict = Depends(get_current_user)):
 @router.get("/{guild_id}/roles")
 async def guild_roles(guild_id: str, user: dict = Depends(get_current_user)):
     """Get guild roles."""
+    await verify_guild_admin(guild_id, user)
     try:
         roles = await get_guild_roles(guild_id)
         return [

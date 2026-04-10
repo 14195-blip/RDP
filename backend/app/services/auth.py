@@ -3,6 +3,7 @@ from jose import jwt, JWTError
 from fastapi import HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.config import JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRATION_HOURS
+from app.services.discord import check_user_is_admin
 
 security = HTTPBearer()
 
@@ -32,3 +33,14 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> dict:
     return decode_token(credentials.credentials)
+
+
+async def verify_guild_admin(guild_id: str, user: dict) -> None:
+    """Verify user has admin permissions for the given guild. Raises 403 if not."""
+    user_id = user.get("sub", "")
+    is_admin = await check_user_is_admin(guild_id, user_id)
+    if not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have admin permissions for this guild",
+        )

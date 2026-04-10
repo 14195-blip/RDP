@@ -1,8 +1,8 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import RedirectResponse
 from app.config import DISCORD_CLIENT_ID, DISCORD_REDIRECT_URI, FRONTEND_URL
 from app.services.discord import exchange_code, get_user_info, get_user_guilds, get_bot_guilds
-from app.services.auth import create_token
+from app.services.auth import create_token, get_current_user as get_current_user_dep
 from app.database import get_db
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -60,12 +60,18 @@ async def callback(code: str = Query(...)):
 
 
 @router.get("/me")
-async def get_me(user: dict = None):
-    """Get current user info. Called from frontend with token."""
-    from app.services.auth import get_current_user
-    from fastapi import Depends
-    # This will be called via dependency injection
-    pass
+async def get_me(user: dict = Depends(get_current_user_dep)):
+    """Get current user info from JWT token."""
+    db = get_db()
+    user_doc = await db.users.find_one({"discord_id": user["sub"]})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {
+        "id": user_doc["discord_id"],
+        "username": user_doc.get("username", ""),
+        "avatar": user_doc.get("avatar"),
+        "global_name": user_doc.get("global_name"),
+    }
 
 
 @router.get("/guilds")
