@@ -80,11 +80,11 @@ async def get_guilds_endpoint(user: dict = Depends(get_current_user_dep)):
     user_id = user["sub"]
 
     db = get_db()
-    user = await db.users.find_one({"discord_id": user_id})
-    if not user:
+    user_doc = await db.users.find_one({"discord_id": user_id})
+    if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
 
-    discord_token = user.get("discord_access_token")
+    discord_token = user_doc.get("discord_access_token")
     if not discord_token:
         raise HTTPException(status_code=401, detail="No Discord token found")
 
