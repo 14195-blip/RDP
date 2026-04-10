@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@layer base {
+  :root {
+    --radius: 0.5rem
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #4338ca33 transparent;
+  }
+  body {
+    @apply bg-[#0a0a1a] text-white;
+  }
+}
+
