@@ -18,8 +18,14 @@ async def get_guild_settings(guild_id: str) -> dict:
     settings = await db.guild_settings.find_one({"guild_id": guild_id})
     if not settings:
         default = GuildSettings(guild_id=guild_id).model_dump()
-        await db.guild_settings.insert_one(default)
-        return default
+        await db.guild_settings.update_one(
+            {"guild_id": guild_id},
+            {"$setOnInsert": default},
+            upsert=True,
+        )
+        settings = await db.guild_settings.find_one({"guild_id": guild_id})
+        settings.pop("_id", None)
+        return settings
     return settings
 
 

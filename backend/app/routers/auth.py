@@ -75,11 +75,9 @@ async def get_me(user: dict = Depends(get_current_user_dep)):
 
 
 @router.get("/guilds")
-async def get_guilds_endpoint(token: str = Query(...)):
+async def get_guilds_endpoint(user: dict = Depends(get_current_user_dep)):
     """Get user's guilds that the bot is also in."""
-    from app.services.auth import decode_token
-    payload = decode_token(token)
-    user_id = payload["sub"]
+    user_id = user["sub"]
 
     db = get_db()
     user = await db.users.find_one({"discord_id": user_id})

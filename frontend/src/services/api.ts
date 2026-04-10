@@ -26,8 +26,8 @@ api.interceptors.response.use(
 );
 
 // Auth
-export const getGuilds = (token: string) =>
-  api.get(`/auth/guilds?token=${token}`);
+export const getGuilds = (_token?: string) =>
+  api.get('/auth/guilds');
 
 // Guild info
 export const getGuildInfo = (guildId: string) =>
