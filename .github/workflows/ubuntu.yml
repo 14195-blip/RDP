@@ -1,0 +1,247 @@
+name: RDP - Ubuntu ARM64
+
+on:
+  workflow_dispatch:
+
+jobs:
+  secure-rdp:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 360
+
+    steps:
+      - name: Verify ARM64 Ubuntu environment
+        shell: bash
+        run: |
+          set -e
+
+          echo "=== SYSTEM ==="
+          uname -a
+          echo
+          echo "Architecture: $(dpkg --print-architecture)"
+          echo "Ubuntu:"
+          lsb_release -a || true
+
+          ARCH="$(dpkg --print-architecture)"
+          if [[ "$ARCH" != "arm64" ]]; then
+            echo "ERROR: Expected arm64 runner, got $ARCH"
+            exit 1
+          fi
+
+      - name: Install desktop environment and xrdp
+        shell: bash
+        run: |
+          set -e
+
+          sudo apt-get update
+
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            xfce4 \
+            xfce4-goodies \
+            xrdp \
+            dbus-x11 \
+            xorgxrdp \
+            curl \
+            wget \
+            ca-certificates \
+            netcat-openbsd
+
+          # Add xrdp to the certificate group.
+          sudo adduser xrdp ssl-cert || true
+
+          # Configure XFCE for xrdp sessions.
+          sudo tee /etc/xrdp/startwm.sh > /dev/null <<'EOF'
+          #!/bin/sh
+
+          export LANG=C.UTF-8
+          export LC_ALL=C.UTF-8
+
+          unset DBUS_SESSION_BUS_ADDRESS
+          unset XDG_RUNTIME_DIR
+
+          startxfce4
+          EOF
+
+          sudo chmod +x /etc/xrdp/startwm.sh
+
+          # Make XFCE the default session for the RDP user.
+          echo "xfce4-session" | sudo tee /etc/skel/.xsession > /dev/null
+
+          sudo systemctl enable xrdp
+          sudo systemctl restart xrdp
+
+          echo "=== XRDP STATUS ==="
+          sudo systemctl --no-pager --full status xrdp || true
+
+      - name: Create RDP user with secure password
+        shell: bash
+        run: |
+          set -e
+
+          USERNAME="rdp"
+
+          # Generate a random 32-character password.
+          PASSWORD="$(openssl rand -base64 48 | tr -dc 'A-Za-z0-9!@#$%^&*_' | head -c 32)"
+
+          if id "$USERNAME" >/dev/null 2>&1; then
+            echo "User already exists, updating password..."
+          else
+            sudo useradd -m -s /bin/bash "$USERNAME"
+          fi
+
+          echo "${USERNAME}:${PASSWORD}" | sudo chpasswd
+
+          # Allow normal sudo administration.
+          sudo usermod -aG sudo "$USERNAME"
+
+          # Configure XFCE session.
+          echo "xfce4-session" | sudo tee "/home/$USERNAME/.xsession" > /dev/null
+          sudo chown "$USERNAME:$USERNAME" "/home/$USERNAME/.xsession"
+          sudo chmod 644 "/home/$USERNAME/.xsession"
+
+          # Store credentials in the GitHub environment.
+          {
+            echo "RDP_USERNAME=$USERNAME"
+            echo "RDP_PASSWORD=$PASSWORD"
+          } >> "$GITHUB_ENV"
+
+          # Verify user creation.
+          if ! id "$USERNAME" >/dev/null 2>&1; then
+            echo "ERROR: User creation failed."
+            exit 1
+          fi
+
+          echo "RDP user created successfully."
+
+      - name: Configure firewall
+        shell: bash
+        run: |
+          set -e
+
+          # GitHub ARM runners generally do not need UFW for this setup.
+          # RDP will be reachable through the Tailscale interface.
+          #
+          # Bind xrdp to the standard RDP port.
+          sudo ss -lntp | grep ':3389' || true
+
+      - name: Install Tailscale
+        shell: bash
+        run: |
+          set -e
+
+          curl -fsSL https://tailscale.com/install.sh | sh
+
+          sudo systemctl enable --now tailscaled
+
+          echo "=== TAILSCALE VERSION ==="
+          tailscale version
+
+      - name: Establish Tailscale connection
+        shell: bash
+        env:
+          TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
+        run: |
+          set -e
+
+          if [[ -z "$TAILSCALE_AUTH_KEY" ]]; then
+            echo "ERROR: TAILSCALE_AUTH_KEY secret is missing."
+            exit 1
+          fi
+
+          HOSTNAME="gh-runner-${GITHUB_RUN_ID}"
+
+          sudo tailscale up \
+            --auth-key="$TAILSCALE_AUTH_KEY" \
+            --hostname="$HOSTNAME"
+
+          echo "Waiting for Tailscale IPv4 address..."
+
+          TS_IP=""
+
+          for _ in {1..20}; do
+            TS_IP="$(tailscale ip -4 2>/dev/null | head -n1 || true)"
+
+            if [[ -n "$TS_IP" ]]; then
+              break
+            fi
+
+            sleep 3
+          done
+
+          if [[ -z "$TS_IP" ]]; then
+            echo "ERROR: Tailscale IP was not assigned."
+            sudo tailscale status
+            exit 1
+          fi
+
+          echo "TAILSCALE_IP=$TS_IP" >> "$GITHUB_ENV"
+
+          echo
+          echo "Tailscale IPv4: $TS_IP"
+          echo "Hostname: $HOSTNAME"
+
+      - name: Verify xrdp service
+        shell: bash
+        run: |
+          set -e
+
+          echo "=== XRDP LISTENING SOCKET ==="
+          sudo ss -lntp | grep ':3389' || {
+            echo "ERROR: xrdp is not listening on port 3389."
+            sudo systemctl status xrdp --no-pager || true
+            exit 1
+          }
+
+          echo
+          echo "=== XRDP SERVICE ==="
+          sudo systemctl is-active --quiet xrdp || {
+            echo "ERROR: xrdp service is not active."
+            sudo systemctl status xrdp --no-pager || true
+            exit 1
+          }
+
+          echo "xrdp is active and listening."
+
+      - name: Verify RDP accessibility
+        shell: bash
+        run: |
+          set -e
+
+          echo "Testing ${TAILSCALE_IP}:3389..."
+
+          for _ in {1..10}; do
+            if nc -z -w 5 "$TAILSCALE_IP" 3389; then
+              echo "TCP connectivity to RDP port 3389 succeeded."
+              exit 0
+            fi
+
+            sleep 3
+          done
+
+          echo "ERROR: TCP connection to RDP port 3389 failed."
+          exit 1
+
+      - name: Show RDP credentials
+        shell: bash
+        run: |
+          echo
+          echo "=========================================="
+          echo "            UBUNTU ARM64 RDP"
+          echo "=========================================="
+          echo "Address : $TAILSCALE_IP"
+          echo "Port    : 3389"
+          echo "Username: $RDP_USERNAME"
+          echo "Password: $RDP_PASSWORD"
+          echo "Desktop : XFCE"
+          echo "=========================================="
+          echo
+
+      - name: Maintain connection
+        shell: bash
+        run: |
+          echo "RDP session is active."
+          echo "The GitHub-hosted runner has a maximum job lifetime of 6 hours."
+
+          while true; do
+            echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] RDP Active"
+            sleep 300
+          done
